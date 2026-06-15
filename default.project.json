@@ -15,6 +15,9 @@
       "$className": "ServerScriptService",
       "Main": {
         "$path": "src/ServerScriptService/Main.server.lua"
+      },
+      "PlaceRedBlock": {
+        "$path": "src/ServerScriptService/PlaceRedBlock.server.lua"
       }
     },
     "StarterPlayer": {
