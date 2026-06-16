@@ -1,27 +1,30 @@
--- Creates RemoteEvents/RemoteFunctions on the server; clients access them by name
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RS = game:GetService("ReplicatedStorage")
 
-local Remotes = {}
-
-local function getOrCreate(className, name)
-	local existing = ReplicatedStorage:FindFirstChild(name)
-	if existing then return existing end
-	local obj = Instance.new(className)
-	obj.Name = name
-	obj.Parent = ReplicatedStorage
-	return obj
+local function event(name)
+	local e = RS:FindFirstChild(name) or Instance.new("RemoteEvent")
+	e.Name = name; e.Parent = RS; return e
+end
+local function func(name)
+	local f = RS:FindFirstChild(name) or Instance.new("RemoteFunction")
+	f.Name = name; f.Parent = RS; return f
 end
 
--- Server → Client: push updated coin balance
-Remotes.UpdateCurrency = getOrCreate("RemoteEvent", "UpdateCurrency")
+return {
+	-- Server → Client pushes
+	UpdateCurrency    = event("UpdateCurrency"),    -- (coins, gems)
+	UpdateWhales      = event("UpdateWhales"),      -- (ownedWhales, placedWhales)
+	UpdatePasses      = event("UpdatePasses"),      -- (ownedPasses table)
+	ShowNotification  = event("ShowNotification"),  -- (message, color)
+	WheelResult       = event("WheelResult"),       -- (rewardLabel)
 
--- Server → Client: push updated whale list
-Remotes.UpdateWhales = getOrCreate("RemoteEvent", "UpdateWhales")
+	-- Client → Server requests (RemoteFunction returns result)
+	HatchEgg          = func("HatchEgg"),           -- (eggName) → whaleName, errMsg
+	SellWhale         = func("SellWhale"),          -- (whaleName) → coinsEarned, errMsg
+	SpinWheel         = func("SpinWheel"),          -- () → reward table, errMsg
+	StealWhale        = func("StealWhale"),         -- (targetPlayer) → whaleName, errMsg
 
--- Client → Server → Client: request a hatch; returns whaleName or nil
-Remotes.HatchEgg = getOrCreate("RemoteFunction", "HatchEgg")
-
--- Client → Server: equip/unequip a whale by name
-Remotes.SetEquipped = getOrCreate("RemoteEvent", "SetEquipped")
-
-return Remotes
+	-- Client → Server fire-and-forget
+	PlaceWhale        = event("PlaceWhale"),        -- (whaleName, slotIndex)
+	RemoveFromPlot    = event("RemoveFromPlot"),    -- (slotIndex)
+	DoRebirth         = event("DoRebirth"),
+}
