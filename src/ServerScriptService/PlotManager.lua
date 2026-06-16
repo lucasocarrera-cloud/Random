@@ -5,6 +5,7 @@
 local RS = game:GetService("ReplicatedStorage")
 local Plot   = require(RS.Config.Plot)
 local Whales = require(RS.Config.Whales)
+local Remotes = require(RS.Remotes)
 
 local PlotManager = {}
 
@@ -81,6 +82,9 @@ function PlotManager.Build(player, data)
 	model.Name = "Plot_" .. player.UserId
 	model.Parent = workspace
 	entry.model = model
+
+	-- Tell the client where their plot base is so it can calc pad positions
+	Remotes.PlotInfo:FireClient(player, entry.base)
 
 	local maxSlots = maxSlotsFor(data)
 	local floorsBuilt = math.ceil(maxSlots / Plot.SlotsPerFloor)

@@ -25,8 +25,12 @@ return {
 	StealWhale        = func("StealWhale"),         -- (targetPlayer) → whaleName, errMsg
 
 	-- Client → Server fire-and-forget
-	PlaceWhale        = event("PlaceWhale"),        -- (whaleName) → auto-placed in next free stable
+	PlaceWhale        = event("PlaceWhale"),        -- (whaleName) places held whale in nearest free stable
 	RemoveFromPlot    = event("RemoveFromPlot"),    -- (slotIndex)
 	DoRebirth         = event("DoRebirth"),
-	GoToPlot          = event("GoToPlot"),          -- client asks server to teleport to their plot
+	GoToPlot          = event("GoToPlot"),
+	SetHeldWhale      = event("SetHeldWhale"),      -- (whaleName or nil) tells server what player is holding
+
+	-- Server → Client
+	PlotInfo          = event("PlotInfo"),          -- (basePos Vector3) sent after plot builds
 }

@@ -82,7 +82,7 @@ local function push(player)
 	local d = playerData[player]
 	if not d then return end
 	Remotes.UpdateCurrency:FireClient(player, d.Coins, d.Gems)
-	Remotes.UpdateWhales:FireClient(player, d.OwnedWhales, d.PlacedWhales)
+	Remotes.UpdateWhales:FireClient(player, d.OwnedWhales, d.PlacedWhales, d.Rebirths)
 end
 
 PlotManager.Init({
@@ -207,6 +207,7 @@ Players.PlayerRemoving:Connect(function(player)
 	saveData(player)
 	PlotManager.Cleanup(player)
 	playerData[player] = nil
+	heldWhale[player] = nil
 end)
 
 -- Teleport player to their own plot
@@ -413,11 +414,25 @@ end)
 
 -- ── PLOT ─────────────────────────────────────────────────────────────────────
 
-Remotes.PlaceWhale.OnServerEvent:Connect(function(player, whaleName)
+local heldWhale = {} -- [player] = whaleName currently on leash
+
+Remotes.SetHeldWhale.OnServerEvent:Connect(function(player, whaleName)
+	heldWhale[player] = whaleName or nil
+end)
+
+Remotes.PlaceWhale.OnServerEvent:Connect(function(player)
 	local data = playerData[player]
 	if not data then return end
+	local whaleName = heldWhale[player]
+	if not whaleName then
+		notify(player, "❌ Pick up a whale first!", Color3.fromRGB(255,80,80))
+		return
+	end
 	local slot, err = PlotManager.PlaceNext(player, data, whaleName)
-	if not slot then
+	if slot then
+		heldWhale[player] = nil
+		Remotes.SetHeldWhale:FireClient(player, nil) -- tell client leash is gone
+	else
 		notify(player, "❌ " .. (err or "Can't place"), Color3.fromRGB(255,80,80))
 	end
 end)

@@ -10,6 +10,9 @@ local PassConfig  = require(RS.Config.GamePasses)
 local SpinConfig  = require(RS.Config.SpinWheel)
 local World       = require(RS.Config.World)
 
+local RunService    = game:GetService("RunService")
+local Plot          = require(RS.Config.Plot)
+
 local player    = Players.LocalPlayer
 local playerGui = player.PlayerGui
 
@@ -21,6 +24,15 @@ local localWhales  = {}
 local localPlaced  = {}
 local localPasses  = {}
 local selectedEgg  = "Starter Egg"
+
+-- Leash / plot state
+local heldWhaleName  = nil   -- name of whale currently on leash
+local plotBase       = nil   -- Vector3 base position of this player's plot
+local leashPart      = nil   -- the floating whale block
+local leashBeam      = nil   -- Beam visual
+local leashAttach0   = nil   -- Attachment on HumanoidRootPart
+local leashAttach1   = nil   -- Attachment on leashPart
+local nearestFreeSlot = nil  -- slot index we're close to (for Place button)
 
 -- ── UTILS ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +53,172 @@ local rarityColors = {
 	Legendary = Color3.fromRGB(255,200,0),
 	Mythical  = Color3.fromRGB(255,60,60),
 }
+
+-- ── PAD POSITION HELPER ─────────────────────────────────────────────────────
+-- Mirrors PlotManager.padOffset — calculates world position of a stable pad.
+local function padWorldPos(base, rebirths, slot)
+	if not base then return nil end
+	local maxSlots = math.clamp(Plot.BaseStables + rebirths, Plot.BaseStables,
+		Plot.SlotsPerFloor * Plot.MaxFloors)
+	if slot > maxSlots then return nil end -- locked
+
+	local floor    = math.ceil(slot / Plot.SlotsPerFloor)
+	local slotInFloor = ((slot - 1) % Plot.SlotsPerFloor) + 1
+	local floorY   = (floor - 1) * Plot.FloorHeight + 1
+	local i        = slotInFloor - 1
+	local col      = i % Plot.GridCols
+	local row      = math.floor(i / Plot.GridCols)
+	local x        = (col - (Plot.GridCols - 1) / 2) * Plot.PadSpacing
+	local z        = (row - (Plot.GridRows - 1) / 2) * Plot.PadSpacing
+	return base + Vector3.new(x, floorY + 0.6, z)
+end
+
+-- ── LEASH SYSTEM ─────────────────────────────────────────────────────────────
+
+local function destroyLeash()
+	if leashPart then leashPart:Destroy(); leashPart = nil end
+	if leashAttach0 then leashAttach0:Destroy(); leashAttach0 = nil end
+	leashBeam = nil; leashAttach1 = nil
+	heldWhaleName = nil
+	nearestFreeSlot = nil
+end
+
+local function pickUpWhale(whaleName)
+	destroyLeash()
+	local whale = WhaleConfig[whaleName]
+	if not whale then return end
+
+	heldWhaleName = whaleName
+	Remotes.SetHeldWhale:FireServer(whaleName)
+
+	-- Floating whale block
+	local block = Instance.new("Part")
+	block.Size = Vector3.new(3.5, 3.5, 3.5)
+	block.Shape = Enum.PartType.Ball
+	block.Color = rarityColors[whale.Rarity] or Color3.new(1,1,1)
+	block.Material = Enum.Material.Neon
+	block.Anchored = false
+	block.CanCollide = false
+	block.CastShadow = false
+	block.Name = "HeldWhale"
+	block.Parent = workspace
+
+	local a1 = Instance.new("Attachment"); a1.Name = "LeashEnd"; a1.Parent = block
+	leashPart   = block
+	leashAttach1 = a1
+
+	-- Leash beam from player HRP
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hrp  = char:WaitForChild("HumanoidRootPart")
+	local a0   = Instance.new("Attachment"); a0.Name = "LeashStart"; a0.Parent = hrp
+	leashAttach0 = a0
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = a0; beam.Attachment1 = a1
+	beam.Width0 = 0.15; beam.Width1 = 0.15
+	beam.Color = ColorSequence.new(Color3.fromRGB(200,170,100))
+	beam.LightEmission = 0.3; beam.Segments = 10
+	beam.FaceCamera = true
+	beam.Parent = hrp
+	leashBeam = beam
+
+	-- Name label on whale
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0,140,0,36); bb.StudsOffset = Vector3.new(0,3,0)
+	bb.AlwaysOnTop = true; bb.Adornee = block; bb.Parent = block
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 1
+	lbl.Text = whaleName; lbl.TextColor3 = Color3.new(1,1,1)
+	lbl.TextStrokeTransparency = 0; lbl.TextScaled = true
+	lbl.Font = Enum.Font.GothamBold; lbl.Parent = bb
+
+	closeAll() -- close any open panels
+end
+
+-- ── PLACE BUTTON (bottom middle, shown when near a free stable) ───────────────
+
+local placeGui = Instance.new("ScreenGui")
+placeGui.Name = "PlaceGui"; placeGui.ResetOnSpawn = false; placeGui.Parent = playerGui
+
+local placeBtn = Instance.new("TextButton")
+placeBtn.Size = UDim2.new(0,220,0,56)
+placeBtn.Position = UDim2.new(0.5,-110,1,-130)
+placeBtn.BackgroundColor3 = Color3.fromRGB(60,200,80)
+placeBtn.BorderSizePixel = 0
+placeBtn.Text = "🐋 Place Whale"
+placeBtn.TextColor3 = Color3.new(1,1,1)
+placeBtn.TextScaled = true
+placeBtn.Font = Enum.Font.GothamBold
+placeBtn.Visible = false
+placeBtn.ZIndex = 25
+placeBtn.Parent = placeGui
+
+local placeCorner = Instance.new("UICorner")
+placeCorner.CornerRadius = UDim.new(0, 14)
+placeCorner.Parent = placeBtn
+
+-- Pulse animation on the button
+local function pulsePlaceBtn()
+	TweenService:Create(placeBtn, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{Size = UDim2.new(0,240,0,62)}):Play()
+end
+
+placeBtn.MouseButton1Click:Connect(function()
+	if heldWhaleName then
+		Remotes.PlaceWhale:FireServer()
+		destroyLeash()
+		placeBtn.Visible = false
+	end
+end)
+
+-- ── PROXIMITY LOOP ────────────────────────────────────────────────────────────
+
+local localRebirths = 0 -- updated when we get rebirth data
+
+RunService.Heartbeat:Connect(function()
+	if not heldWhaleName or not plotBase then
+		placeBtn.Visible = false
+		return
+	end
+
+	local char = player.Character
+	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then placeBtn.Visible = false; return end
+
+	-- Float the whale block behind/beside the player
+	if leashPart then
+		local offset = (hrp.CFrame * CFrame.new(3, 1.5, 2)).Position
+		leashPart.CFrame = CFrame.new(
+			offset + Vector3.new(math.sin(tick()*1.5)*0.4, math.sin(tick()*2)*0.3, 0)
+		)
+	end
+
+	-- Check proximity to free stables
+	local maxSlots = math.clamp(Plot.BaseStables + localRebirths, Plot.BaseStables,
+		Plot.SlotsPerFloor * Plot.MaxFloors)
+	local closest, closestDist = nil, 8 -- studs threshold
+
+	for slot = 1, maxSlots do
+		if not localPlaced[tostring(slot)] then -- free slot
+			local padPos = padWorldPos(plotBase, localRebirths, slot)
+			if padPos then
+				local dist = (hrp.Position - padPos).Magnitude
+				if dist < closestDist then
+					closestDist = dist
+					closest = slot
+				end
+			end
+		end
+	end
+
+	nearestFreeSlot = closest
+	if closest and not placeBtn.Visible then
+		placeBtn.Visible = true
+		pulsePlaceBtn()
+	elseif not closest then
+		placeBtn.Visible = false
+	end
+end)
 
 local function makeCorner(parent, radius)
 	local c = Instance.new("UICorner")
@@ -307,12 +485,12 @@ local function buildInventory()
 			local cntL = newLabel(card, "×" .. count, UDim2.new(0.14,0,0,24), true, Color3.fromRGB(200,200,200))
 			cntL.Position = UDim2.new(0.55,0,0,4); cntL.ZIndex = 7
 
-			-- Place button
-			local placeBtn = newBtn(card, "Place ▶", Color3.fromRGB(50,170,80),
+			-- Hold button — picks up the whale on a leash so player walks to a stable
+			local holdBtn = newBtn(card, "Hold 🐋", Color3.fromRGB(50,170,80),
 				UDim2.new(0.28,0,0,36), UDim2.new(0.55,0,0,30))
-			placeBtn.ZIndex = 7
-			placeBtn.MouseButton1Click:Connect(function()
-				Remotes.PlaceWhale:FireServer(whaleName)
+			holdBtn.ZIndex = 7
+			holdBtn.MouseButton1Click:Connect(function()
+				pickUpWhale(whaleName)
 			end)
 
 			-- Sell button
@@ -627,13 +805,29 @@ Remotes.UpdateCurrency.OnClientEvent:Connect(function(coins, gems)
 	gemLbl.Text  = "💎 " .. fmt(localGems)
 end)
 
-Remotes.UpdateWhales.OnClientEvent:Connect(function(owned, placed)
+Remotes.UpdateWhales.OnClientEvent:Connect(function(owned, placed, rebirths)
 	localWhales = owned or {}; localPlaced = placed or {}
+	if rebirths then
+		localRebirths = rebirths
+		rebirthLbl.Text = "🔄 Rebirths: " .. tostring(rebirths)
+	end
 end)
 
 Remotes.UpdatePasses.OnClientEvent:Connect(function(passes)
 	localPasses = passes or {}
-	-- Count rebirths shown via HUD — passes updated, no rebirth count here
+end)
+
+-- Receive plot base position from server after build
+Remotes.PlotInfo.OnClientEvent:Connect(function(base)
+	plotBase = base
+end)
+
+-- Server confirms leash cleared (e.g. after successful place)
+Remotes.SetHeldWhale.OnClientEvent:Connect(function(whaleName)
+	if not whaleName then
+		destroyLeash()
+		placeBtn.Visible = false
+	end
 end)
 
 Remotes.ShowNotification.OnClientEvent:Connect(function(msg, color)
