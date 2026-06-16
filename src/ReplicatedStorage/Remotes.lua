@@ -16,6 +16,7 @@ return {
 	UpdatePasses      = event("UpdatePasses"),      -- (ownedPasses table)
 	ShowNotification  = event("ShowNotification"),  -- (message, color)
 	WheelResult       = event("WheelResult"),       -- (rewardLabel)
+	OpenShop          = event("OpenShop"),          -- (shopType) server→client when NPC prompt triggered
 
 	-- Client → Server requests (RemoteFunction returns result)
 	HatchEgg          = func("HatchEgg"),           -- (eggName) → whaleName, errMsg

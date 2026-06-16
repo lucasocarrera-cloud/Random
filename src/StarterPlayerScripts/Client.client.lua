@@ -8,6 +8,7 @@ local WhaleConfig = require(RS.Config.Whales)
 local EggConfig   = require(RS.Config.Eggs)
 local PassConfig  = require(RS.Config.GamePasses)
 local SpinConfig  = require(RS.Config.SpinWheel)
+local World       = require(RS.Config.World)
 
 local player    = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -559,11 +560,20 @@ local function closeAll()
 	sellPanel.Visible = false; shopPanel.Visible = false; spinPanel.Visible = false
 end
 
+-- Teleport the character to a stand (then walk up & press E to open)
+local function teleportTo(worldPos)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp then
+		hrp.CFrame = CFrame.new(worldPos + Vector3.new(0, 5, 8))
+	end
+end
+
 tpShop.MouseButton1Click:Connect(function()
-	closeAll(); buildEggShop(); eggPanel.Visible = true
+	closeAll(); teleportTo(World.Stands.EggShop.Pos)
 end)
 tpSell.MouseButton1Click:Connect(function()
-	closeAll(); buildSellStore(); sellPanel.Visible = true
+	closeAll(); teleportTo(World.Stands.SellShop.Pos)
 end)
 invBtn.MouseButton1Click:Connect(function()
 	closeAll(); buildInventory(); invPanel.Visible = true
@@ -579,8 +589,22 @@ spinBtn.MouseButton1Click:Connect(function()
 end)
 tpPlot.MouseButton1Click:Connect(function()
 	closeAll()
-	-- Teleport logic: move character to the plot area (server handles plot positions)
-	showNotif("Teleporting to your plot...", Color3.fromRGB(100,255,150))
+	teleportTo(World.PlotCenter)
+	showNotif("Teleported to your plot! 🗺️", Color3.fromRGB(100,255,150))
+end)
+
+-- NPC proximity prompt opens the matching shop panel
+Remotes.OpenShop.OnClientEvent:Connect(function(shopType)
+	closeAll()
+	if shopType == "Egg" then
+		buildEggShop(); eggPanel.Visible = true
+	elseif shopType == "Sell" then
+		buildSellStore(); sellPanel.Visible = true
+	elseif shopType == "Robux" then
+		buildRobuxShop(); shopPanel.Visible = true
+	elseif shopType == "Spin" then
+		spinPanel.Visible = true
+	end
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════

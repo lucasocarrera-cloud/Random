@@ -32,7 +32,23 @@ local function newData()
 		TempMultiplier = 1,    -- from wheel spin, resets on expiry
 		TempMultExpiry = 0,
 		ThiefLastUsed  = 0,    -- os.time() of last Whale Thief use
+		Initialized    = false,-- has the free starter whale been granted?
 	}
+end
+
+-- Total number of whales a player owns (across all types)
+local function totalOwned(data)
+	local n = 0
+	for _, count in pairs(data.OwnedWhales) do n = n + (count or 0) end
+	return n
+end
+
+-- Is this whale currently placed on the plot?
+local function isPlaced(data, whaleName)
+	for _, name in pairs(data.PlacedWhales) do
+		if name == whaleName then return true end
+	end
+	return false
 end
 
 local function loadData(player)
@@ -153,6 +169,13 @@ Players.PlayerAdded:Connect(function(player)
 	local data = loadData(player)
 	playerData[player] = data
 
+	-- Grant a free starter whale on first join (auto-placed so they always earn)
+	if not data.Initialized then
+		data.Initialized = true
+		data.OwnedWhales["Classic Whale"] = (data.OwnedWhales["Classic Whale"] or 0) + 1
+		data.PlacedWhales["1"] = "Classic Whale"
+	end
+
 	-- Offline earnings
 	if data.LastLeaveTime > 0 then
 		local elapsed = os.time() - data.LastLeaveTime
@@ -224,6 +247,16 @@ Remotes.SellWhale.OnServerInvoke = function(player, whaleName)
 	if not whale then return 0, "Unknown whale" end
 	if not data.OwnedWhales[whaleName] or data.OwnedWhales[whaleName] < 1 then
 		return 0, "You don't own this whale"
+	end
+
+	-- Anti soft-lock: never let a player sell their very last whale
+	if totalOwned(data) <= 1 then
+		return 0, "Can't sell your last whale!"
+	end
+
+	-- Must remove from plot before selling (keeps your income source safe)
+	if isPlaced(data, whaleName) and (data.OwnedWhales[whaleName] or 0) <= 1 then
+		return 0, "Remove this whale from your plot first"
 	end
 
 	-- Remove from owned (not from plot)
