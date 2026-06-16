@@ -485,8 +485,8 @@ local function buildInventory()
 			local cntL = newLabel(card, "×" .. count, UDim2.new(0.14,0,0,24), true, Color3.fromRGB(200,200,200))
 			cntL.Position = UDim2.new(0.55,0,0,4); cntL.ZIndex = 7
 
-			-- Hold button — picks up the whale on a leash so player walks to a stable
-			local holdBtn = newBtn(card, "Hold 🐋", Color3.fromRGB(50,170,80),
+			-- Equip button — single press picks up whale on a leash
+			local holdBtn = newBtn(card, "Equip 🐋", Color3.fromRGB(50,170,80),
 				UDim2.new(0.28,0,0,36), UDim2.new(0.55,0,0,30))
 			holdBtn.ZIndex = 7
 			holdBtn.MouseButton1Click:Connect(function()
