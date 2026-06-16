@@ -24,6 +24,26 @@ local plots = {}     -- [player] = { model, base, index }
 local usedIndex = {} -- [index] = true
 local getData, pushFn
 
+-- 3x2 plot grid around the central plaza (must match MapBuilder bases & WorldMap.Lots)
+local PLOT_GRID = {
+	Vector3.new(-78,0,-104), Vector3.new(0,0,-104), Vector3.new(78,0,-104),
+	Vector3.new(-78,0,104),  Vector3.new(0,0,104),  Vector3.new(78,0,104),
+}
+local function gridBase(index)
+	return PLOT_GRID[index+1] or (Plot.Origin + Vector3.new(index*Plot.PlotSpacing,0,0))
+end
+local function setLotSign(index, titleText, subText)
+	local m = workspace:FindFirstChild("WorldMap")
+	local lots = m and m:FindFirstChild("Lots")
+	local lot = lots and lots:FindFirstChild("Lot"..(index+1))
+	local beam = lot and lot:FindFirstChild("Beam")
+	local bb = beam and beam:FindFirstChildWhichIsA("BillboardGui")
+	if not bb then return end
+	local t = bb:FindFirstChild("Title"); local s = bb:FindFirstChild("Sub")
+	if t then t.Text = titleText end
+	if s then s.Text = subText end
+end
+
 function PlotManager.Init(opts)
 	getData = opts.getData
 	pushFn  = opts.push
@@ -202,8 +222,9 @@ function PlotManager.Assign(player)
 	local index = 0
 	while usedIndex[index] do index = index + 1 end
 	usedIndex[index] = true
-	local base = Plot.Origin + Vector3.new(index * Plot.PlotSpacing, 0, 0)
+	local base = gridBase(index)
 	plots[player] = { model = nil, base = base, index = index }
+	setLotSign(index, player.Name, "Plot")
 	return base
 end
 
@@ -217,6 +238,7 @@ function PlotManager.Cleanup(player)
 	local entry = plots[player]
 	if entry then
 		if entry.model then entry.model:Destroy() end
+		setLotSign(entry.index, "Plot "..(entry.index+1), "Empty")
 		usedIndex[entry.index] = nil
 		plots[player] = nil
 	end
