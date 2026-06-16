@@ -13,9 +13,7 @@
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "Main": {
-        "$path": "src/ServerScriptService/Main.server.lua"
-      }
+      "$path": "src/ServerScriptService"
     },
     "StarterPlayer": {
       "$className": "StarterPlayer",

@@ -10,6 +10,7 @@ local EggConfig     = require(RS.Config.Eggs)
 local PassConfig    = require(RS.Config.GamePasses)
 local SpinConfig    = require(RS.Config.SpinWheel)
 local Remotes       = require(RS.Remotes)
+local PlotManager   = require(script.Parent.PlotManager)
 
 local DataStore     = DataStoreService:GetDataStore(GameConfig.DataStoreKey)
 
@@ -83,6 +84,11 @@ local function push(player)
 	Remotes.UpdateCurrency:FireClient(player, d.Coins, d.Gems)
 	Remotes.UpdateWhales:FireClient(player, d.OwnedWhales, d.PlacedWhales)
 end
+
+PlotManager.Init({
+	getData = function(p) return playerData[p] end,
+	push = push,
+})
 
 local function notify(player, msg, color)
 	Remotes.ShowNotification:FireClient(player, msg, color or Color3.fromRGB(100,255,150))
@@ -168,6 +174,7 @@ end
 Players.PlayerAdded:Connect(function(player)
 	local data = loadData(player)
 	playerData[player] = data
+	PlotManager.Assign(player)
 
 	-- Grant a free starter whale on first join (auto-placed so they always earn)
 	if not data.Initialized then
@@ -192,12 +199,24 @@ Players.PlayerAdded:Connect(function(player)
 	end
 
 	checkPasses(player, data)
+	PlotManager.Build(player, data)
 	push(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
 	saveData(player)
+	PlotManager.Cleanup(player)
 	playerData[player] = nil
+end)
+
+-- Teleport player to their own plot
+Remotes.GoToPlot.OnServerEvent:Connect(function(player)
+	local spawn = PlotManager.GetSpawn(player)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if spawn and hrp then
+		hrp.CFrame = CFrame.new(spawn)
+	end
 end)
 
 -- ── HATCH EGG ────────────────────────────────────────────────────────────────
@@ -387,36 +406,26 @@ Remotes.DoRebirth.OnServerEvent:Connect(function(player)
 	data.Rebirths = data.Rebirths + 1
 	data.RebirthMult = data.RebirthMult * GameConfig.RebirthMultiplierPerRebirth
 
+	PlotManager.Build(player, data)
 	push(player)
-	notify(player, "🔄 Reborn! You now earn " .. string.format("%.1f", data.RebirthMult) .. "× coins!", Color3.fromRGB(150,100,255))
+	notify(player, "🔄 Reborn! You now earn " .. string.format("%.1f", data.RebirthMult) .. "× coins! +1 stable!", Color3.fromRGB(150,100,255))
 end)
 
 -- ── PLOT ─────────────────────────────────────────────────────────────────────
 
-Remotes.PlaceWhale.OnServerEvent:Connect(function(player, whaleName, slotIndex)
+Remotes.PlaceWhale.OnServerEvent:Connect(function(player, whaleName)
 	local data = playerData[player]
 	if not data then return end
-	if not WhaleConfig[whaleName] then return end
-	if not data.OwnedWhales[whaleName] or data.OwnedWhales[whaleName] < 1 then return end
-
-	local maxSlots = GameConfig.MaxPlotSlots
-	if data.OwnedPasses.ExtraPlotSlots then maxSlots = maxSlots + 6 end
-	if data.OwnedPasses.VIP then maxSlots = maxSlots + 3 end
-
-	-- Count placed slots
-	local placed = 0
-	for _ in pairs(data.PlacedWhales) do placed = placed + 1 end
-	if placed >= maxSlots and not data.PlacedWhales[tostring(slotIndex)] then return end
-
-	data.PlacedWhales[tostring(slotIndex)] = whaleName
-	push(player)
+	local slot, err = PlotManager.PlaceNext(player, data, whaleName)
+	if not slot then
+		notify(player, "❌ " .. (err or "Can't place"), Color3.fromRGB(255,80,80))
+	end
 end)
 
 Remotes.RemoveFromPlot.OnServerEvent:Connect(function(player, slotIndex)
 	local data = playerData[player]
 	if not data then return end
-	data.PlacedWhales[tostring(slotIndex)] = nil
-	push(player)
+	PlotManager.Remove(player, data, tonumber(slotIndex) or slotIndex)
 end)
 
 -- ── INCOME LOOP ───────────────────────────────────────────────────────────────
@@ -455,6 +464,9 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 			data.OwnedPasses[key] = true
 			Remotes.UpdatePasses:FireClient(player, data.OwnedPasses)
 			notify(player, "✅ " .. pass.Name .. " activated!", Color3.fromRGB(100,255,150))
+			if key == "ExtraPlotSlots" or key == "VIP" then
+				PlotManager.Build(player, data)
+			end
 			break
 		end
 	end

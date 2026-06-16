@@ -304,12 +304,22 @@ local function buildInventory()
 			local incL = newLabel(card, "💰 " .. fmt(whale.Income) .. "/sec", UDim2.new(0.5,0,0,22), false, Color3.fromRGB(255,215,0))
 			incL.Position = UDim2.new(0,12,0,56); incL.TextXAlignment = Enum.TextXAlignment.Left; incL.ZIndex = 7
 
-			local cntL = newLabel(card, "×" .. count, UDim2.new(0.2,0,0,28), true, Color3.fromRGB(200,200,200))
-			cntL.Position = UDim2.new(0.78,0,0,4); cntL.ZIndex = 7
+			local cntL = newLabel(card, "×" .. count, UDim2.new(0.14,0,0,24), true, Color3.fromRGB(200,200,200))
+			cntL.Position = UDim2.new(0.55,0,0,4); cntL.ZIndex = 7
+
+			-- Place button
+			local placeBtn = newBtn(card, "Place ▶", Color3.fromRGB(50,170,80),
+				UDim2.new(0.28,0,0,36), UDim2.new(0.55,0,0,30))
+			placeBtn.ZIndex = 7
+			placeBtn.MouseButton1Click:Connect(function()
+				Remotes.PlaceWhale:FireServer(whaleName)
+			end)
 
 			-- Sell button
-			local sellBtn2 = newBtn(card, "Sell\n🪙" .. fmt(whale.SellValue), Color3.fromRGB(200,60,60),
-				UDim2.new(0.18,0,0,50), UDim2.new(0.81,0,0,30))
+			local sellBtn2 = newBtn(card, "Sell 🪙" .. fmt(whale.SellValue), Color3.fromRGB(200,60,60),
+				UDim2.new(0.28,0,0,36), UDim2.new(0.84,0,0,30))
+			sellBtn2.Position = UDim2.new(0.84,-4,0,30)
+			sellBtn2.AnchorPoint = Vector2.new(1,0)
 			sellBtn2.ZIndex = 7
 			sellBtn2.MouseButton1Click:Connect(function()
 				local earned, err = Remotes.SellWhale:InvokeServer(whaleName)
@@ -589,7 +599,7 @@ spinBtn.MouseButton1Click:Connect(function()
 end)
 tpPlot.MouseButton1Click:Connect(function()
 	closeAll()
-	teleportTo(World.PlotCenter)
+	Remotes.GoToPlot:FireServer()
 	showNotif("Teleported to your plot! 🗺️", Color3.fromRGB(100,255,150))
 end)
 
