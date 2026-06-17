@@ -22,7 +22,7 @@ local rarityColors = {
 
 local plots = {}     -- [player] = { model, base, index }
 local usedIndex = {} -- [index] = true
-local getData, pushFn
+local getData, pushFn, getHeld, clearHeld
 
 -- 3x2 plot grid around the central plaza (must match MapBuilder bases & WorldMap.Lots)
 local PLOT_GRID = {
@@ -45,8 +45,10 @@ local function setLotSign(index, titleText, subText)
 end
 
 function PlotManager.Init(opts)
-	getData = opts.getData
-	pushFn  = opts.push
+	getData  = opts.getData
+	pushFn   = opts.push
+	getHeld  = opts.getHeld   -- (player) -> whaleName currently equipped, or nil
+	clearHeld = opts.clearHeld -- (player) -> clears the equipped whale tool
 end
 
 -- ── RULES ────────────────────────────────────────────────────────────────────
@@ -105,6 +107,8 @@ function PlotManager.Build(player, data)
 
 	-- Tell the client where their plot base is so it can calc pad positions
 	Remotes.PlotInfo:FireClient(player, entry.base)
+
+	entry.padPrompts = {} -- "Place Whale" prompts on empty stables
 
 	local maxSlots = maxSlotsFor(data)
 	local floorsBuilt = math.ceil(maxSlots / Plot.SlotsPerFloor)
@@ -169,6 +173,22 @@ function PlotManager.Build(player, data)
 				local llbl = Instance.new("TextLabel")
 				llbl.Size = UDim2.new(1,0,1,0); llbl.BackgroundTransparency = 1
 				llbl.Text = "🔒"; llbl.TextScaled = true; llbl.Parent = lockBb
+			else
+				-- Empty unlocked stable → "Place Whale" prompt (only useful while holding one)
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.ActionText = "Place Whale"; prompt.ObjectText = "Empty Stable"
+				prompt.KeyboardKeyCode = Enum.KeyCode.E; prompt.HoldDuration = 0
+				prompt.MaxActivationDistance = 10; prompt.RequiresLineOfSight = false
+				prompt.Enabled = (getHeld and getHeld(player) ~= nil) or false
+				prompt.Parent = pad
+				table.insert(entry.padPrompts, prompt)
+				prompt.Triggered:Connect(function(plr)
+					if plr ~= player then return end
+					local held = getHeld and getHeld(player)
+					if not held then return end
+					local ok = PlotManager.PlaceAt(player, getData(player), held, slot)
+					if ok and clearHeld then clearHeld(player) end
+				end)
 			end
 		end
 
@@ -208,6 +228,33 @@ function PlotManager.PlaceNext(player, data, whaleName)
 		end
 	end
 	return nil, "No free stables — rebirth to unlock more!"
+end
+
+-- Places a whale into a specific slot (used by the pad ProximityPrompt).
+-- Returns true on success, or nil + error message.
+function PlotManager.PlaceAt(player, data, whaleName, slot)
+	if not Whales[whaleName] then return nil, "Unknown whale" end
+	local owned = data.OwnedWhales[whaleName] or 0
+	if owned < 1 then return nil, "You don't own this whale" end
+	if placedCount(data, whaleName) >= owned then
+		return nil, "All your " .. whaleName .. " are already placed"
+	end
+	if slot > maxSlotsFor(data) then return nil, "Locked stable" end
+	if data.PlacedWhales[tostring(slot)] ~= nil then return nil, "Stable taken" end
+
+	data.PlacedWhales[tostring(slot)] = whaleName
+	PlotManager.Build(player, data)
+	if pushFn then pushFn(player) end
+	return true
+end
+
+-- Toggle the "Place Whale" prompts on a player's empty stables.
+function PlotManager.SetPromptsEnabled(player, on)
+	local entry = plots[player]
+	if not entry or not entry.padPrompts then return end
+	for _, prompt in ipairs(entry.padPrompts) do
+		if prompt and prompt.Parent then prompt.Enabled = on end
+	end
 end
 
 function PlotManager.Remove(player, data, slot)

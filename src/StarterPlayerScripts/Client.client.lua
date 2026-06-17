@@ -485,12 +485,14 @@ local function buildInventory()
 			local cntL = newLabel(card, "×" .. count, UDim2.new(0.14,0,0,24), true, Color3.fromRGB(200,200,200))
 			cntL.Position = UDim2.new(0.55,0,0,4); cntL.ZIndex = 7
 
-			-- Equip button — single press picks up whale on a leash
+			-- Equip button — gives a whale Tool in the backpack
 			local holdBtn = newBtn(card, "Equip 🐋", Color3.fromRGB(50,170,80),
 				UDim2.new(0.28,0,0,36), UDim2.new(0.55,0,0,30))
 			holdBtn.ZIndex = 7
 			holdBtn.MouseButton1Click:Connect(function()
-				pickUpWhale(whaleName)
+				Remotes.SetHeldWhale:FireServer(whaleName)
+				invPanel.Visible = false
+				showNotif("🎒 " .. whaleName .. " added to your backpack! Hold it & press E on an empty stable.", Color3.fromRGB(100,220,255))
 			end)
 
 			-- Sell button

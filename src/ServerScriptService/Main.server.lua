@@ -85,9 +85,31 @@ local function push(player)
 	Remotes.UpdateWhales:FireClient(player, d.OwnedWhales, d.PlacedWhales, d.Rebirths)
 end
 
+-- ── HELD WHALE (backpack Tool) ────────────────────────────────────────────────
+
+local heldWhale  = {} -- [player] = whaleName currently equipped
+local whaleTools = {} -- [player] = the Tool instance
+
+local rarityColor = {
+	Common = Color3.fromRGB(180,180,180), Uncommon = Color3.fromRGB(80,200,80),
+	Rare = Color3.fromRGB(80,140,255), Epic = Color3.fromRGB(180,80,255),
+	Legendary = Color3.fromRGB(255,200,0), Mythical = Color3.fromRGB(255,60,60),
+}
+
+local function clearHeld(player)
+	if whaleTools[player] then
+		whaleTools[player]:Destroy()
+		whaleTools[player] = nil
+	end
+	heldWhale[player] = nil
+	PlotManager.SetPromptsEnabled(player, false)
+end
+
 PlotManager.Init({
 	getData = function(p) return playerData[p] end,
 	push = push,
+	getHeld = function(p) return heldWhale[p] end,
+	clearHeld = clearHeld,
 })
 
 local function notify(player, msg, color)
@@ -205,9 +227,9 @@ end)
 
 Players.PlayerRemoving:Connect(function(player)
 	saveData(player)
+	clearHeld(player)
 	PlotManager.Cleanup(player)
 	playerData[player] = nil
-	heldWhale[player] = nil
 end)
 
 -- Teleport player to their own plot
@@ -414,27 +436,56 @@ end)
 
 -- ── PLOT ─────────────────────────────────────────────────────────────────────
 
-local heldWhale = {} -- [player] = whaleName currently on leash
-
+-- Equip a whale: gives the player a Tool in their backpack. They select it,
+-- walk to an empty stable, and the pad's "Place Whale" prompt (E) places it.
 Remotes.SetHeldWhale.OnServerEvent:Connect(function(player, whaleName)
-	heldWhale[player] = whaleName or nil
-end)
-
-Remotes.PlaceWhale.OnServerEvent:Connect(function(player)
 	local data = playerData[player]
 	if not data then return end
-	local whaleName = heldWhale[player]
+
 	if not whaleName then
-		notify(player, "❌ Pick up a whale first!", Color3.fromRGB(255,80,80))
+		clearHeld(player)
 		return
 	end
-	local slot, err = PlotManager.PlaceNext(player, data, whaleName)
-	if slot then
-		heldWhale[player] = nil
-		Remotes.SetHeldWhale:FireClient(player, nil) -- tell client leash is gone
-	else
-		notify(player, "❌ " .. (err or "Can't place"), Color3.fromRGB(255,80,80))
+
+	local whale = WhaleConfig[whaleName]
+	if not whale then return end
+	local owned = data.OwnedWhales[whaleName] or 0
+	if owned < 1 then
+		notify(player, "❌ You don't own this whale", Color3.fromRGB(255,80,80))
+		return
 	end
+
+	clearHeld(player) -- remove any previous tool
+
+	local tool = Instance.new("Tool")
+	tool.Name = whaleName
+	tool.RequiresHandle = true
+	tool.CanBeDropped = false
+	tool.ToolTip = "Walk to an empty stable and press E to place"
+
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(3, 3, 3)
+	handle.Shape = Enum.PartType.Ball
+	handle.Color = rarityColor[whale.Rarity] or Color3.new(1,1,1)
+	handle.Material = Enum.Material.Neon
+	handle.Parent = tool
+
+	tool.Parent = player.Backpack
+	whaleTools[player] = tool
+	heldWhale[player] = whaleName
+
+	PlotManager.SetPromptsEnabled(player, true)
+	notify(player, "Equipped " .. whaleName .. "! Open your backpack, hold it, and press E on an empty stable.", Color3.fromRGB(100,220,255))
+
+	-- If the tool is removed/destroyed by the player, clear held state
+	tool.AncestryChanged:Connect(function(_, parent)
+		if not parent and heldWhale[player] == whaleName and whaleTools[player] == tool then
+			heldWhale[player] = nil
+			whaleTools[player] = nil
+			PlotManager.SetPromptsEnabled(player, false)
+		end
+	end)
 end)
 
 Remotes.RemoveFromPlot.OnServerEvent:Connect(function(player, slotIndex)
