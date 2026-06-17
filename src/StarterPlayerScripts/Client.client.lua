@@ -835,3 +835,31 @@ end)
 Remotes.ShowNotification.OnClientEvent:Connect(function(msg, color)
 	showNotif(msg, color)
 end)
+
+-- ── WHALE BOB ANIMATION ──────────────────────────────────────────────────────
+-- Finds all placed whale blocks (named "Whale_*") anywhere in the workspace
+-- and applies a gentle floating sine-wave. Base Y is captured on first sight.
+local RunService = game:GetService("RunService")
+local whaleBaseY = {}  -- [part] = original Y
+
+RunService.Heartbeat:Connect(function()
+	local t = tick()
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Part") and obj.Name:sub(1, 6) == "Whale_" and obj.Anchored then
+			if not whaleBaseY[obj] then
+				whaleBaseY[obj] = obj.Position.Y
+			end
+			local base = whaleBaseY[obj]
+			-- gentle bob: 0.6 studs amplitude, 1.4 second period, offset by part's X so they don't all sync
+			local offset = math.sin(t * (2 * math.pi / 1.4) + obj.Position.X * 0.3) * 0.6
+			obj.CFrame = CFrame.new(obj.Position.X, base + offset, obj.Position.Z)
+				* (obj.CFrame - obj.CFrame.Position)
+		end
+	end
+	-- Clean up table entries for destroyed parts
+	for part in pairs(whaleBaseY) do
+		if not part.Parent then
+			whaleBaseY[part] = nil
+		end
+	end
+end)
