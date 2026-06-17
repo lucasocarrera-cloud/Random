@@ -851,7 +851,7 @@ RunService.Heartbeat:Connect(function()
 			end
 			local base = whaleBaseY[obj]
 			-- gentle bob: 0.6 studs amplitude, 1.4 second period, offset by part's X so they don't all sync
-			local offset = math.sin(t * (2 * math.pi / 1.4) + obj.Position.X * 0.3) * 0.6
+			local offset = math.sin(t * (2 * math.pi / 1.4)) * 0.6
 			obj.CFrame = CFrame.new(obj.Position.X, base + offset, obj.Position.Z)
 				* (obj.CFrame - obj.CFrame.Position)
 		end
