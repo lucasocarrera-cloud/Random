@@ -1,0 +1,18 @@
+Freelance Rate Calculator,,How to use: fill in the YELLOW cells (column B) and the calculated rows update.
+,,
+INPUTS,VALUE,
+Target take-home income per year,50000,<-- what you want to actually earn
+Tax + expenses buffer (%),30,<-- set aside this % for tax/software/etc
+Billable hours per week,25,<-- realistic client hours (not 40 - admin eats the rest)
+Weeks worked per year,46,<-- 52 minus holidays/sick/slow weeks
+,,
+CALCULATED,VALUE,
+Gross income needed (before tax/expenses),=B4/(1-B5/100),target / (1 - buffer)
+Total billable hours per year,=B6*B7,hours/week x weeks
+Minimum hourly rate,=B10/B11,gross needed / total hours
+Suggested rate (round up 15%),=B12*1.15,give yourself margin
+,,
+PROJECT PRICING HELPER,VALUE,
+Estimated hours for this project,10,<-- change per project
+Project price (at suggested rate),=B16*B13,
+Add buffer for revisions/admin (20%),=B17*1.2,quote this number

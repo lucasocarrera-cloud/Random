@@ -1,0 +1,23 @@
+INVOICE,,,
+,,,
+From:,[Your Name / Business],,
+Email:,[your@email.com],,
+,,,
+Bill To:,[Client Name],,
+Client Email:,[client@email.com],,
+,,,
+Invoice #:,001,Invoice Date:,2026-06-21
+Due Date:,2026-07-05,Payment Terms:,Net 14
+,,,
+Description,Quantity,Rate,Amount
+[Service description e.g. Logo design],1,500,=B14*C14
+[Additional item],0,0,=B15*C15
+[Additional item],0,0,=B16*C16
+,,,
+,,Subtotal,=SUM(D14:D16)
+,,Discount,0
+,,Tax (if applicable),0
+,,TOTAL DUE,=D18-D19+D20
+,,,
+Payment methods:,[PayPal / Bank transfer / etc],,
+Notes:,Thank you for your business!,,

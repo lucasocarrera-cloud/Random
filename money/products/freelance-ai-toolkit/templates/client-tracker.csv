@@ -1,0 +1,12 @@
+Client / Lead Name,Source,Service,Status,Quoted Price,Deposit Paid?,Final Paid?,Next Action,Due Date,Notes
+Example: Joe's Cafe,Instagram DM,Social media setup,Lead,$450,No,No,Send proposal,2026-06-25,Wants help with menu photos too
+,,,Lead / Proposal Sent / Won / Lost / In Progress / Complete,,Yes/No,Yes/No,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+TOTALS,,,,=SUM(E2:E11),,,,,
